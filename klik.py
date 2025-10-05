@@ -31,7 +31,7 @@ def loop_click(interval):
 
 
 
-def repeat():
+def do_repeat():
     while True:
         repeat = input("\nSpustit znova? Y/N: ")
         if repeat.lower().strip() in ["y", "yes", "ano", "yy", "kk", "k", "yup", "j", "jj"]:
@@ -64,6 +64,6 @@ def main():
     while True:
                 
         loop_click(get_interval())
-        repeat()
+        do_repeat()
 
 main()
