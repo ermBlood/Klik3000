@@ -154,12 +154,15 @@ def get_arrow_pos():
         screen = numpy.array(screenshot)
         screen = screen[:, :, :3]
 
+        # cv2.imshow("lol", screen)
+        # cv2.waitKey(0)
+
         for i in scale_list:
             resized_arrow = cv2.resize(arrow, (int(w*i), int(h*i)))
             screen_match = cv2.matchTemplate(screen, resized_arrow, cv2.TM_CCOEFF_NORMED)
             screen_result = cv2.minMaxLoc(screen_match)
 
-            if screen_result[1] > .8:
+            if screen_result[1] > .7:
                 scale = i
                 arrow_x = int(screen_result[3][0] + resized_arrow.shape[1]/2)
                 arrow_y = int(screen_result[3][1] + resized_arrow.shape[0]/2)
@@ -195,7 +198,7 @@ def is_arrow_still_there(pos, scale):
         screen_result = cv2.matchTemplate(screen, resized_arrow, cv2.TM_CCOEFF_NORMED)
         screen_match = cv2.minMaxLoc(screen_result)
 
-        return screen_match[1] > .8
+        return screen_match[1] > .7
 
 
 def main():
