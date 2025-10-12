@@ -1,5 +1,4 @@
-import time
-import sys, os, signal
+import sys, os, signal, time, mss, numpy, cv2
 from threading import Event
 from pynput.mouse import Button, Controller as MouseController, Listener as mouseListener
 from pynput.keyboard import Key, Controller as KeyboardController, Listener as keyboardListener
@@ -17,12 +16,14 @@ keyboard = KeyboardController()
 STOP_ALL = Event()
 STOP_LOOP = Event()
 MODE = "get_input"
+POS_MODE = "AUTO"
 
 
 
-def loop_click(interval, pos):
-    if pos == None:
+def loop_click(interval, pos_and_scale):
+    if pos_and_scale == None:
         return
+    pos, scale = pos_and_scale
 
     global MODE
     MODE = "loop"
@@ -36,6 +37,9 @@ def loop_click(interval, pos):
             if STOP_LOOP.is_set():
                 STOP_LOOP.clear()
                 return
+            if POS_MODE == "AUTO" and not is_arrow_still_there(pos, scale):
+                print("Tlačítko nenalezeno")
+                return
             
         print("klik")
         mouse.position = pos
@@ -47,6 +51,11 @@ def loop_click(interval, pos):
 def do_repeat():
     global MODE
     MODE = "get_input"
+    global POS_MODE
+    POS_MODE = "AUTO"
+    global SCALE
+    SCALE = None
+
     while True:
         clear_input()
         repeat = input("\nSpustit znova? Y/N: ")
@@ -78,9 +87,11 @@ def get_interval():
             print("Číslo, ty jelito")
 
 
-def get_pos():
+def get_pos_manual():
     global MODE
     MODE = "loop"
+    global POS_MODE
+    POS_MODE = "MANUAL"
     print(f"Klikni na požadované místo klikání")
     pos = ()
 
@@ -131,13 +142,69 @@ def clear_input():
     else: termios.tcflush(sys.stdin, termios.TCIFLUSH)
 
 
+def get_arrow_pos():
+    arrow = cv2.imread("arrow.png")
+    w = arrow.shape[1]
+    h = arrow.shape[0]
+    scale_list = [1, 1.2, 1.4, 1.6, .8, 1.8, 2]
+    
+    #search arrow with different scale
+    with mss.mss() as sct:
+        screenshot = sct.grab(sct.monitors[0])
+        screen = numpy.array(screenshot)
+        screen = screen[:, :, :3]
+
+        for i in scale_list:
+            resized_arrow = cv2.resize(arrow, (int(w*i), int(h*i)))
+            screen_match = cv2.matchTemplate(screen, resized_arrow, cv2.TM_CCOEFF_NORMED)
+            screen_result = cv2.minMaxLoc(screen_match)
+
+            if screen_result[1] > .8:
+                scale = i
+                arrow_x = int(screen_result[3][0] + resized_arrow.shape[1]/2)
+                arrow_y = int(screen_result[3][1] + resized_arrow.shape[0]/2)
+                screen_arrow_pos = (arrow_x, arrow_y)
+                print(f"Pozice tlačítka je {screen_arrow_pos}")
+                return screen_arrow_pos, scale
+                    
+        global MODE
+        MODE = "get_input"
+        clear_input()
+        manual = input("Tlačítko nenalezeno, vybrat manuálně? Y/N: ")
+        if manual.lower().strip() in ["y", "yes", "ano", "yy", "kk", "k", "yup", "j", "jj"]:
+            return get_pos_manual(), 1
+        elif manual.lower().strip() in ["n", "nn", "no", "nope", "ne"]:
+            return
+
+
+def is_arrow_still_there(pos, scale):
+    print(pos)
+    print(scale)
+    arrow = cv2.imread("arrow.png")
+    w = arrow.shape[1]
+    h = arrow.shape[0]
+    resized_arrow = cv2.resize(arrow, (int(w*scale), int(h*scale)))
+
+    with mss.mss() as sct:
+        screenshot = sct.grab({"left": int(pos[0]-(resized_arrow.shape[1]/2)), "top": int(pos[1]-(resized_arrow.shape[0]/2)), "width": resized_arrow.shape[1], "height": resized_arrow.shape[0]})
+        screen = numpy.array(screenshot)
+        screen = screen[:, :, :3]
+        # cv2.imshow("lol", screen)
+        # cv2.waitKey(0)
+        # cv2.destroyAllWindows() 
+        screen_result = cv2.matchTemplate(screen, resized_arrow, cv2.TM_CCOEFF_NORMED)
+        screen_match = cv2.minMaxLoc(screen_result)
+
+        return screen_match[1] > .8
+
+
 def main():
 
     keyboard_listener()
     print("\nVítej v utilitě Klik3000\n")
 
     while not STOP_ALL.is_set():
-        loop_click(get_interval(), get_pos())
+        loop_click(get_interval(), get_arrow_pos())
         do_repeat()
 
 main()
